@@ -6,11 +6,32 @@
 #define BAUDRATE 9600
 
 
+//motor definitions
+#define ENABLE_PIN_ONE 10
+#define ENABLE_PIN_TWO 11
+
+//control pins
+
+//motor one
+#define CONTROL1_PIN_M1 2
+#define CONTROL2_PIN_M1 7
+//motor two
+#define CONTROL1_PIN_M2 4
+#define CONTROL2_PIN_M2 9
+
+#define FORWARD 1
+#define BACKWARD 2
+
 int gyroScale = 131;
 bool firstIteration = true;
 const int offsetIterations = 6;
 
 double currentTime, lastTime, timeStep;
+
+double setpoint = 0;
+double input;
+int output;
+double errorSum = 0, lastError;
 double radsToDeg = (180/3.141592);
 double offsetX = 0;
 
@@ -67,6 +88,13 @@ typedef struct
   double rotZ; 
 }Rotation;
 
+typedef struct
+{
+  double kP;
+  double kI;
+  double kD; 
+}PIDConsts;
+
 
 Acceleration accel;
 AccelAngle  aAccel;
@@ -74,11 +102,15 @@ Gyro gyro;
 ScaledGyro sGyro;
 GyroAngle aGyro;
 Rotation rotation;
+PIDConsts pidK;
 
+//pointers
+PIDConsts *ptr_pidk = &pidK;
 MPU6050 IMU;
 
 void setup()
 {
+  initMotors();
   Wire.begin();
   Serial.begin(BAUDRATE);
   IMU.initialize();
@@ -97,6 +129,7 @@ void setup()
   }
     offsetX = startX/offsetIterations; 
     Serial.println(offsetX);
+    setPIDConsts(7,0,0,ptr_pidk);
   
 }
 
@@ -109,7 +142,30 @@ void loop()
   integrateGyro();
   complementaryFilter();
   logAngle();
-  testDrive();
+  currentTime = millis();
+  input = abs(rotation.rotX);
+
+  //pid loop
+  double deltaTime = currentTime - lastTime;
+
+  double error = setpoint - input;
+  errorSum +=(error * deltaTime);
+  double derivativeError = (error- lastError)/(deltaTime);
+
+  output = abs((pidK.kP * error) + (pidK.kI * errorSum) + (pidK.kD * derivativeError));
+  if(rotation.rotX > 5)
+  {
+    drive(output, BACKWARD);
+  }else if(rotation.rotX < -5)
+  {
+    drive(output, FORWARD);
+  }else
+  {
+    errorSum = 0;
+    stopMotors();
+  }
+  //forceDrive();
+  Serial.println(output);
 }
 
 
@@ -181,7 +237,7 @@ void complementaryFilter()
 
 void logAngle()
 {
- Serial.println(rotation.rotX);
+ //Serial.println(rotation.rotX);
  //Serial.println(rotation.rotY);
  //Serial.println(rotation.rotZ); 
 }
@@ -199,5 +255,53 @@ void testDrive()
   Serial.println("stopping");
   Serial.print(rotation.rotX); 
  }
-  
 }
+void setPIDConsts(double KP, double KI, double KD, PIDConsts *pidK)
+{
+  pidK -> kP = KP;
+  pidK -> kI = KI;
+  pidK -> kD = KD;
+}
+
+void drive(int power, int dir)
+{
+  int motorPower = power;
+  if(dir == 1)
+  {
+    digitalWrite(CONTROL1_PIN_M1, HIGH);
+    digitalWrite(CONTROL2_PIN_M1, LOW);
+    digitalWrite(CONTROL1_PIN_M2, HIGH);
+    digitalWrite(CONTROL2_PIN_M2, LOW);
+  }else if(dir == 2)
+  {
+    digitalWrite(CONTROL1_PIN_M1, LOW);
+    digitalWrite(CONTROL2_PIN_M1, HIGH);
+    digitalWrite(CONTROL1_PIN_M2, LOW);
+    digitalWrite(CONTROL2_PIN_M2, HIGH);
+  }
+  analogWrite(ENABLE_PIN_ONE,motorPower);
+  analogWrite(ENABLE_PIN_TWO,motorPower);
+ }
+ void initMotors()
+ {
+  pinMode(ENABLE_PIN_ONE, OUTPUT);
+  pinMode(ENABLE_PIN_TWO, OUTPUT);
+
+  pinMode(CONTROL1_PIN_M1, OUTPUT);
+  pinMode(CONTROL2_PIN_M1, OUTPUT);
+  pinMode(CONTROL1_PIN_M2, OUTPUT);
+  pinMode(CONTROL2_PIN_M2, OUTPUT);
+ }
+ void stopMotors()
+ {
+  analogWrite(ENABLE_PIN_ONE, 0);
+  analogWrite(ENABLE_PIN_TWO ,0);
+ } 
+
+ void forceDrive()
+ {
+  analogWrite(ENABLE_PIN_ONE, 255);
+  analogWrite(ENABLE_PIN_TWO, 255);
+  }
+
+//she answered but she accidently muted herself 
