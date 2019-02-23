@@ -111,11 +111,13 @@ MPU6050 IMU;
 void setup()
 {
   initMotors();
+  //initialize mpu
   Wire.begin();
   Serial.begin(BAUDRATE);
   IMU.initialize();
   currentTime = millis();
   delay(500);
+  //compute offset 
   for(int i = 0; i < offsetIterations; i++)
   {
     updateTime();
@@ -129,7 +131,7 @@ void setup()
   }
     offsetX = startX/offsetIterations; 
     Serial.println(offsetX);
-    setPIDConsts(7,0,0,ptr_pidk);
+    setPIDConsts(7,3,2.3,ptr_pidk);
   
 }
 
@@ -166,6 +168,8 @@ void loop()
   }
   //forceDrive();
   Serial.println(output);
+  lastError = error;
+  lastTime = currentTime
 }
 
 
@@ -303,5 +307,3 @@ void drive(int power, int dir)
   analogWrite(ENABLE_PIN_ONE, 255);
   analogWrite(ENABLE_PIN_TWO, 255);
   }
-
-//she answered but she accidently muted herself 
